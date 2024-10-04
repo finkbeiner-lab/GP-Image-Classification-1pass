@@ -57,6 +57,6 @@ class AttentionModel(nn.Module):
         x4=torch.cat((x2, x3),0)
         #final classification
         output = self.drop_out(self.linear(x4))
-        return output
+        return output, M_mat, m_mat
 
 

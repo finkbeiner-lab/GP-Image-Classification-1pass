@@ -11,7 +11,6 @@ import glob
 from torchvision import transforms
 from openslide import open_slide
 from openslide.deepzoom import DeepZoomGenerator
-import pyfiglet
 from skimage import measure
 from tqdm import tqdm
 from PIL import Image
@@ -30,7 +29,7 @@ class TensorDataset(data.Dataset):
         self.root_dir=root_dir
         self.ext=extension
         self.classes, self.class_to_idx = self.find_classes()
-        self.file_list = glob.glob(self.root_dir + "**/*."+self.ext)
+        self.file_list = glob.glob(self.root_dir + "/**/*."+self.ext)
         print("file list", self.file_list)
 
     def find_classes(self):
@@ -55,7 +54,7 @@ class TensorDataset(data.Dataset):
 
 class ImageDataset(data.Dataset):
 
-    def __init__(self, root_dir, patch, scale, overlap, device,extension,workers=10,level=16):
+    def __init__(self, root_dir, patch, scale, overlap, device,extension,workers=4,level=16):
         #, segment=False, json_path=None, image_save_dir=None, mask_save_dir=None
         self.root_dir=root_dir
         #self.image_save_dir=image_save_dir
@@ -73,7 +72,8 @@ class ImageDataset(data.Dataset):
         ])
         self.device=device
         self.classes, self.class_to_idx = self.find_classes()
-        self.file_list = glob.glob(self.root_dir+"**/*."+self.ext)
+        #pdb.set_trace()
+        self.file_list = glob.glob(self.root_dir+"/**/*."+self.ext)
         self.level=level
         #self.ID_MASK_SHAPE = (patch, patch)
         #self.json_path = json_path
@@ -92,11 +92,20 @@ class ImageDataset(data.Dataset):
     
     def __getitem__(self, index):
         file_name = os.path.join(self.root_dir, self.file_list[index])
-        slide = open_slide(os.path.join(self.root_dir,self.file_list[index]))
+        if self.file_list[index].endswith("pth"):
+            file_id = self.file_list[index].replace(".pth","")
+            #file_name = os.path.join(self.root_dir, self.file_list[index])
+            slide = open_slide(os.path.join(self.root_dir,file_id))
+        else:
+            slide = open_slide(os.path.join(self.root_dir,self.file_list[index]))
         tiles = DeepZoomGenerator(slide,tile_size=self.patch,overlap=self.overlap,limit_bounds=False)
-        self.level = tiles.level_count-1
+        self.level = tiles.level_count-2
+        print(tiles.level_count)
+        print(self.level)
         W,H=tiles.level_tiles[self.level]
         print(tiles.level_dimensions)
+        print(W,H)
+        #pdb.set_trace()
         #creation of a tensor with size [in_H/patch_size, inW/patch_size] where in_H and in_W are height and width of the original image
         ris = torch.zeros([H, W, 3, self.patch, self.patch], device=self.device)
         #mask_ris = torch.zeros([H, W, 3, self.patch, self.patch], device=self.device)
@@ -131,6 +140,7 @@ class ImageDataset(data.Dataset):
         tensor=torch.load(self.file_list[index])
         running_label = os.path.basename(os.path.dirname(self.file_list[index]))
         label = torch.tensor([self.classes.index(running_label)], device=self.device)
+        tensor.requires_grad=True
         return (tensor,label,file_name)
 
     
